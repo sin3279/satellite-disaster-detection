@@ -1,0 +1,8 @@
+{
+  "name": "Satellite Disaster Detection",
+  "description": "AI-powered satellite image-based disaster detection system with frontend, backend, and database for analyzing flood, wildfire, storm, and earthquake damage.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
