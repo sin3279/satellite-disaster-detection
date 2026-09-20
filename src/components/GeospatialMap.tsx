@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { DetectionResult, SatellitePreset } from "../types";
 import { Globe, MapPin, Crosshair, Navigation, Layers, Flame, Droplet, Activity, Wind, Mountain, Eye, ExternalLink } from "lucide-react";
+import { playTelemetryPing } from "../utils/audioEffects";
 
 interface GeospatialMapProps {
   presets: SatellitePreset[];
@@ -13,8 +14,14 @@ export const GeospatialMap: React.FC<GeospatialMapProps> = ({
   history,
   onSelectTarget
 }) => {
-  const [selectedPreset, setSelectedPreset] = useState<SatellitePreset>(presets[0]);
+  const [selectedPreset, setSelectedPreset] = useState<SatellitePreset | null>(presets[0] || null);
   const [activeHazardFilter, setActiveHazardFilter] = useState<string>("all");
+
+  useEffect(() => {
+    if (!selectedPreset && presets.length > 0) {
+      setSelectedPreset(presets[0]);
+    }
+  }, [presets, selectedPreset]);
 
   const filteredPresets = presets.filter((p) => {
     if (activeHazardFilter === "all") return true;
@@ -168,7 +175,10 @@ export const GeospatialMap: React.FC<GeospatialMapProps> = ({
                   key={preset.id}
                   id={`map-pin-${preset.id}`}
                   style={{ top: `${y}%`, left: `${x}%` }}
-                  onClick={() => setSelectedPreset(preset)}
+                  onClick={() => {
+                    setSelectedPreset(preset);
+                    playTelemetryPing(1050);
+                  }}
                   className="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer z-20"
                 >
                   {/* Ping Animation on Active/Selected */}
@@ -209,62 +219,74 @@ export const GeospatialMap: React.FC<GeospatialMapProps> = ({
 
         {/* Selected Target AOI Detail Card (4 cols) */}
         <div className="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4">
-          <div>
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Target AOI Telemetry
-              </span>
-              <span className="text-[11px] font-mono text-cyan-300 px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800 font-bold">
-                {selectedPreset.disasterType}
-              </span>
+          {selectedPreset ? (
+            <>
+              <div>
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Target AOI Telemetry
+                  </span>
+                  <span className="text-[11px] font-mono text-cyan-300 px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800 font-bold">
+                    {selectedPreset.disasterType}
+                  </span>
+                </div>
+
+                <div className="relative h-36 rounded-lg overflow-hidden bg-slate-950 mb-3 border border-slate-800">
+                  <img
+                    src={selectedPreset.imageUrl}
+                    alt={selectedPreset.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-1.5 left-2 text-[10px] font-mono text-cyan-300 bg-slate-950/90 px-2 py-0.5 rounded border border-cyan-800">
+                    {selectedPreset.coordinates.lat.toFixed(4)}°, {selectedPreset.coordinates.lng.toFixed(4)}°
+                  </div>
+                </div>
+
+                <h3 className="text-sm font-bold text-slate-100 leading-snug">
+                  {selectedPreset.title}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  {selectedPreset.location}, {selectedPreset.country}
+                </p>
+
+                <div className="mt-3 space-y-2 text-xs bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
+                  <div className="flex justify-between text-slate-300">
+                    <span className="text-slate-500">Sensor:</span>
+                    <span className="font-mono text-cyan-300 truncate max-w-[170px]">{selectedPreset.sensor}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span className="text-slate-500">Resolution:</span>
+                    <span className="font-mono">{selectedPreset.resolution}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span className="text-slate-500">Event Date:</span>
+                    <span className="font-mono">{selectedPreset.date}</span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-400 mt-3 leading-relaxed">
+                  {selectedPreset.description}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectTarget(selectedPreset);
+                  playTelemetryPing(1200);
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs uppercase tracking-wider shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <Crosshair className="w-4 h-4" />
+                <span>Load Into Satellite Scanner</span>
+              </button>
+            </>
+          ) : (
+            <div className="text-center py-12 text-slate-500 space-y-2">
+              <Crosshair className="w-8 h-8 mx-auto text-slate-600 animate-spin" />
+              <p className="text-xs">Synchronizing global satellite coordinates...</p>
             </div>
-
-            <div className="relative h-36 rounded-lg overflow-hidden bg-slate-950 mb-3 border border-slate-800">
-              <img
-                src={selectedPreset.imageUrl}
-                alt={selectedPreset.title}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute bottom-1.5 left-2 text-[10px] font-mono text-cyan-300 bg-slate-950/90 px-2 py-0.5 rounded border border-cyan-800">
-                {selectedPreset.coordinates.lat.toFixed(4)}°, {selectedPreset.coordinates.lng.toFixed(4)}°
-              </div>
-            </div>
-
-            <h3 className="text-sm font-bold text-slate-100 leading-snug">
-              {selectedPreset.title}
-            </h3>
-            <p className="text-xs text-slate-400 mt-1">
-              {selectedPreset.location}, {selectedPreset.country}
-            </p>
-
-            <div className="mt-3 space-y-2 text-xs bg-slate-950/60 p-3 rounded-lg border border-slate-800/80">
-              <div className="flex justify-between text-slate-300">
-                <span className="text-slate-500">Sensor:</span>
-                <span className="font-mono text-cyan-300 truncate max-w-[170px]">{selectedPreset.sensor}</span>
-              </div>
-              <div className="flex justify-between text-slate-300">
-                <span className="text-slate-500">Resolution:</span>
-                <span className="font-mono">{selectedPreset.resolution}</span>
-              </div>
-              <div className="flex justify-between text-slate-300">
-                <span className="text-slate-500">Event Date:</span>
-                <span className="font-mono">{selectedPreset.date}</span>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-400 mt-3 leading-relaxed">
-              {selectedPreset.description}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => onSelectTarget(selectedPreset)}
-            className="w-full py-2.5 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs uppercase tracking-wider shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
-          >
-            <Crosshair className="w-4 h-4" />
-            <span>Load Into Satellite Scanner</span>
-          </button>
+          )}
         </div>
       </div>
     </div>

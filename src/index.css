@@ -3,8 +3,242 @@
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
   h1, h2, h3, .font-display {
     font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* ----------------------------------------------------
+   GLOBAL THEME CSS DEFINITIONS
+   ---------------------------------------------------- */
+
+/* 1. Theme Orbital (Cyan / Deep Space - Default) */
+body.theme-orbital {
+  --bg-main: #020617;
+  --bg-card: #0f172a;
+  --bg-subtle: #090e1a;
+  --border-color: #1e293b;
+  --accent-primary: #06b6d4;
+  --accent-glow: rgba(6, 182, 212, 0.4);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+}
+
+/* 2. Theme Tactical (Amber / FLIR High-Alert) */
+body.theme-tactical {
+  --bg-main: #0c0a09;
+  --bg-card: #1c1917;
+  --bg-subtle: #141210;
+  --border-color: #292524;
+  --accent-primary: #f59e0b;
+  --accent-glow: rgba(245, 158, 11, 0.4);
+  --text-main: #fafaf9;
+  --text-muted: #a8a29e;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+}
+body.theme-tactical .text-cyan-400,
+body.theme-tactical .text-cyan-300 {
+  color: #fbbf24 !important;
+}
+body.theme-tactical .bg-cyan-500 {
+  background-color: #f59e0b !important;
+  color: #0c0a09 !important;
+}
+body.theme-tactical .bg-cyan-500\/15 {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+}
+body.theme-tactical .border-cyan-500,
+body.theme-tactical .border-cyan-500\/40,
+body.theme-tactical .border-cyan-500\/30 {
+  border-color: rgba(245, 158, 11, 0.5) !important;
+}
+
+/* 3. Theme Emerald (Radar Matrix Green) */
+body.theme-emerald {
+  --bg-main: #021a12;
+  --bg-card: #062e22;
+  --bg-subtle: #032318;
+  --border-color: #0d4a36;
+  --accent-primary: #10b981;
+  --accent-glow: rgba(16, 185, 129, 0.4);
+  --text-main: #ecfdf5;
+  --text-muted: #6ee7b7;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+}
+body.theme-emerald .text-cyan-400,
+body.theme-emerald .text-cyan-300 {
+  color: #34d399 !important;
+}
+body.theme-emerald .bg-cyan-500 {
+  background-color: #10b981 !important;
+  color: #021a12 !important;
+}
+body.theme-emerald .bg-cyan-500\/15 {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+}
+body.theme-emerald .border-cyan-500,
+body.theme-emerald .border-cyan-500\/40,
+body.theme-emerald .border-cyan-500\/30 {
+  border-color: rgba(16, 185, 129, 0.5) !important;
+}
+
+/* 4. Theme Crimson (Crisis / High-Threat DEFCON-1) */
+body.theme-crimson {
+  --bg-main: #140509;
+  --bg-card: #280b13;
+  --bg-subtle: #1c070c;
+  --border-color: #4c1120;
+  --accent-primary: #f43f5e;
+  --accent-glow: rgba(244, 63, 94, 0.4);
+  --text-main: #fff1f2;
+  --text-muted: #fda4af;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+}
+body.theme-crimson .text-cyan-400,
+body.theme-crimson .text-cyan-300 {
+  color: #fb7185 !important;
+}
+body.theme-crimson .bg-cyan-500 {
+  background-color: #f43f5e !important;
+  color: #ffffff !important;
+}
+body.theme-crimson .bg-cyan-500\/15 {
+  background-color: rgba(244, 63, 94, 0.2) !important;
+}
+body.theme-crimson .border-cyan-500,
+body.theme-crimson .border-cyan-500\/40,
+body.theme-crimson .border-cyan-500\/30 {
+  border-color: rgba(244, 63, 94, 0.5) !important;
+}
+
+/* 5. Theme Aerospace (Clean High-Contrast Light) */
+body.theme-aerospace {
+  --bg-main: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-subtle: #f1f5f9;
+  --border-color: #cbd5e1;
+  --accent-primary: #0284c7;
+  --accent-glow: rgba(2, 132, 199, 0.2);
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+body.theme-aerospace .bg-slate-950 {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+body.theme-aerospace .bg-slate-900,
+body.theme-aerospace .bg-slate-900\/95,
+body.theme-aerospace .bg-slate-900\/90 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+body.theme-aerospace .border-slate-800,
+body.theme-aerospace .border-slate-800\/80,
+body.theme-aerospace .border-slate-800\/60,
+body.theme-aerospace .border-slate-700 {
+  border-color: #e2e8f0 !important;
+}
+body.theme-aerospace .text-slate-100 {
+  color: #0f172a !important;
+}
+body.theme-aerospace .text-slate-200 {
+  color: #1e293b !important;
+}
+body.theme-aerospace .text-slate-300 {
+  color: #334155 !important;
+}
+body.theme-aerospace .text-slate-400 {
+  color: #64748b !important;
+}
+body.theme-aerospace .text-slate-500 {
+  color: #94a3b8 !important;
+}
+body.theme-aerospace .text-cyan-400,
+body.theme-aerospace .text-cyan-300 {
+  color: #0369a1 !important;
+}
+body.theme-aerospace .bg-cyan-500 {
+  background-color: #0284c7 !important;
+  color: #ffffff !important;
+}
+body.theme-aerospace .bg-cyan-950 {
+  background-color: #e0f2fe !important;
+  color: #0369a1 !important;
+  border-color: #bae6fd !important;
+}
+
+/* ----------------------------------------------------
+   VFX OVERLAYS & ANIMATIONS
+   ---------------------------------------------------- */
+
+/* Scanlines Effect */
+.vfx-scanlines {
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.25) 50%
+  ), linear-gradient(
+    90deg,
+    rgba(255, 0, 0, 0.02),
+    rgba(0, 255, 0, 0.01),
+    rgba(0, 0, 255, 0.02)
+  );
+  background-size: 100% 3px, 6px 100%;
+  pointer-events: none;
+}
+
+/* Cyber HUD Grid Effect */
+.vfx-cyber-hud {
+  background-image: 
+    linear-gradient(to right, rgba(6, 182, 212, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(6, 182, 212, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+/* Radar Sweep Pulse Keyframe */
+@keyframes radar-pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.radar-sweep-effect {
+  animation: radar-pulse 3s infinite ease-in-out;
+}
+
+/* Satellite Laser Scanner Sweep Keyframe */
+@keyframes scan {
+  0% {
+    top: 0%;
+    opacity: 0.9;
+  }
+  50% {
+    top: calc(100% - 4px);
+    opacity: 1;
+  }
+  100% {
+    top: 0%;
+    opacity: 0.9;
+  }
+}
+
+/* Printable Dossier Optimizations */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+  header, nav, #login-page-container, #ai-copilot-floating-btn, button, .no-print {
+    display: none !important;
   }
 }

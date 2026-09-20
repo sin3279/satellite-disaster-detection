@@ -1,6 +1,7 @@
-import React, { useState } from "react";
-import { DisasterIncident, IncidentUnit, User } from "../types";
-import { Siren, Users, Send, ShieldAlert, CheckCircle, Clock, Truck, Plane, Radio, AlertTriangle, Plus } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { DisasterIncident, IncidentUnit, User, DisasterType } from "../types";
+import { Siren, Users, Send, ShieldAlert, CheckCircle, Clock, Truck, Plane, Radio, AlertTriangle, Plus, ShieldCheck } from "lucide-react";
+import { playTelemetryPing, playAuthSuccess, playCriticalAlert } from "../utils/audioEffects";
 
 interface IncidentResponseProps {
   incidents: DisasterIncident[];
@@ -13,13 +14,31 @@ export const IncidentResponse: React.FC<IncidentResponseProps> = ({
   currentUser,
   onRefreshIncidents
 }) => {
-  const [selectedIncident, setSelectedIncident] = useState<DisasterIncident>(incidents[0] || null);
+  const [selectedIncident, setSelectedIncident] = useState<DisasterIncident | null>(incidents[0] || null);
   const [isDispatching, setIsDispatching] = useState(false);
+  const [isDeclaringIncident, setIsDeclaringIncident] = useState(false);
   const [dispatchUnitType, setDispatchUnitType] = useState<IncidentUnit["type"]>("USAR Team");
   const [dispatchUnitName, setDispatchUnitName] = useState("");
   const [dispatchSector, setDispatchSector] = useState("North Ridge Perimeter");
   const [personnelCount, setPersonnelCount] = useState<number>(16);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // New incident fields
+  const [newTitle, setNewTitle] = useState("");
+  const [newLocation, setNewLocation] = useState("");
+  const [newHazard, setNewHazard] = useState<DisasterType>("Wildfire");
+  const [newSeverity, setNewSeverity] = useState<"Moderate" | "Severe" | "Catastrophic">("Severe");
+
+  useEffect(() => {
+    if (!selectedIncident && incidents.length > 0) {
+      setSelectedIncident(incidents[0]);
+    } else if (selectedIncident && incidents.length > 0) {
+      const refreshed = incidents.find((i) => i.id === selectedIncident.id);
+      if (refreshed) {
+        setSelectedIncident(refreshed);
+      }
+    }
+  }, [incidents, selectedIncident]);
 
   const handleDispatch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,10 +60,45 @@ export const IncidentResponse: React.FC<IncidentResponseProps> = ({
       if (res.ok) {
         setIsDispatching(false);
         setDispatchUnitName("");
+        playAuthSuccess();
         onRefreshIncidents();
       }
     } catch (e) {
       console.error("Dispatch failed:", e);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateIncident = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim()) return;
+    setIsSubmitting(true);
+
+    try {
+      const res = await fetch("/api/incidents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          location: newLocation.trim() || "Priority Theater AOI",
+          hazardType: newHazard,
+          severity: newSeverity,
+          coordinatorName: currentUser?.name || "Commander"
+        })
+      });
+
+      if (res.ok) {
+        const created = await res.json();
+        setIsDeclaringIncident(false);
+        setNewTitle("");
+        setNewLocation("");
+        playCriticalAlert();
+        onRefreshIncidents();
+        setSelectedIncident(created);
+      }
+    } catch (e) {
+      console.error("Failed to declare incident:", e);
     } finally {
       setIsSubmitting(false);
     }
@@ -109,17 +163,34 @@ export const IncidentResponse: React.FC<IncidentResponseProps> = ({
           </p>
         </div>
 
-        {/* Dispatch Action Button */}
-        {selectedIncident && (
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setIsDispatching(true)}
-            className="py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-rose-900/30 cursor-pointer"
+            onClick={() => {
+              setIsDeclaringIncident(true);
+              playTelemetryPing(1000);
+            }}
+            className="py-1.5 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-semibold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            <span>Dispatch Relief Unit</span>
+            <Plus className="w-4 h-4 text-cyan-400" />
+            <span>Declare Incident</span>
           </button>
-        )}
+
+          {selectedIncident && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsDispatching(true);
+                playTelemetryPing(1100);
+              }}
+              className="py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-rose-900/30 cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Dispatch Relief Unit</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main Grid: Incidents List (4 Cols) + Active Incident Command (8 Cols) */}
@@ -376,9 +447,110 @@ export const IncidentResponse: React.FC<IncidentResponseProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 py-2 px-3 rounded-lg bg-cyan-500 text-slate-950 font-bold hover:bg-cyan-400"
+                  className="flex-1 py-2 px-3 rounded-lg bg-cyan-500 text-slate-950 font-bold hover:bg-cyan-400 cursor-pointer"
                 >
                   {isSubmitting ? "Deploying..." : "Confirm Deployment"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Declare New Incident Modal Dialog */}
+      {isDeclaringIncident && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                <span>Declare Emergency Incident Command</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsDeclaringIncident(false)}
+                className="text-slate-400 hover:text-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateIncident} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                  Incident Title / Operational Codename
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Sierra Cascade Wildfire Surge"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                  Target Location / AOI
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Butte County Sector 3"
+                  value={newLocation}
+                  onChange={(e) => setNewLocation(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                    Hazard Type
+                  </label>
+                  <select
+                    value={newHazard}
+                    onChange={(e) => setNewHazard(e.target.value as DisasterType)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500"
+                  >
+                    <option value="Wildfire">Wildfire</option>
+                    <option value="Flood">Flood</option>
+                    <option value="Earthquake">Earthquake</option>
+                    <option value="Cyclone">Cyclone</option>
+                    <option value="Volcanic Eruption">Volcanic Eruption</option>
+                    <option value="Landslide">Landslide</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                    Threat Severity
+                  </label>
+                  <select
+                    value={newSeverity}
+                    onChange={(e) => setNewSeverity(e.target.value as any)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500"
+                  >
+                    <option value="Moderate">Moderate</option>
+                    <option value="Severe">Severe</option>
+                    <option value="Catastrophic">Catastrophic</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDeclaringIncident(false)}
+                  className="flex-1 py-2 px-3 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !newTitle.trim()}
+                  className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-amber-500 to-rose-600 text-slate-950 font-bold hover:brightness-110 disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmitting ? "Establishing..." : "Establish Incident"}
                 </button>
               </div>
             </form>

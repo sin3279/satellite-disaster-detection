@@ -1,33 +1,78 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { DetectionResult, HazardZone } from "../types";
-import { Maximize2, Layers, Eye, EyeOff, Crosshair, AlertTriangle, ShieldCheck, Flame, Droplet, RefreshCw } from "lucide-react";
+import {
+  Maximize2,
+  Minimize2,
+  Layers,
+  Eye,
+  EyeOff,
+  Crosshair,
+  AlertTriangle,
+  Flame,
+  Droplet,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Compass
+} from "lucide-react";
+import { playTelemetryPing } from "../utils/audioEffects";
 
 interface SatelliteViewerProps {
   imageUrl: string;
   result: DetectionResult | null;
   isScanning: boolean;
   onResetView?: () => void;
+  onScan?: () => void;
 }
 
 export const SatelliteViewer: React.FC<SatelliteViewerProps> = ({
   imageUrl,
   result,
   isScanning,
-  onResetView
+  onResetView,
+  onScan
 }) => {
   const [showOverlays, setShowOverlays] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<"normal" | "false-color" | "high-contrast">("normal");
+  const [activeFilter, setActiveFilter] = useState<"normal" | "false-color" | "high-contrast" | "sar-radar" | "ndvi">("normal");
   const [hoveredZone, setHoveredZone] = useState<HazardZone | null>(null);
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [mouseCoords, setMouseCoords] = useState<{ x: number; y: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const getFilterClass = () => {
     switch (activeFilter) {
       case "false-color":
-        return "hue-rotate-90 saturate-200 contrast-125";
+        return "hue-rotate-90 saturate-200 contrast-125 brightness-105";
       case "high-contrast":
         return "contrast-150 brightness-110 saturate-150";
+      case "sar-radar":
+        return "invert contrast-200 grayscale brightness-90 saturate-50";
+      case "ndvi":
+        return "hue-rotate-180 saturate-200 contrast-150";
       default:
         return "";
     }
+  };
+
+  const handleFilterChange = (filter: typeof activeFilter) => {
+    setActiveFilter(filter);
+    playTelemetryPing(900);
+  };
+
+  const handleZoom = (delta: number) => {
+    setZoomLevel((prev) => {
+      const next = Math.min(Math.max(prev + delta, 1), 2.5);
+      playTelemetryPing(700 + next * 200);
+      return Math.round(next * 10) / 10;
+    });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current || !result) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+    setMouseCoords({ x: Math.round(xPct), y: Math.round(yPct) });
   };
 
   const getZoneBorderColor = (severity: string) => {
@@ -44,12 +89,12 @@ export const SatelliteViewer: React.FC<SatelliteViewerProps> = ({
   };
 
   return (
-    <div id="satellite-viewport-container" className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+    <div id="satellite-viewport-container" className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-xl">
       {/* Viewport Toolbar */}
-      <div className="bg-slate-950/80 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between gap-3 text-xs flex-wrap">
+      <div className="bg-slate-950/90 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between gap-3 text-xs flex-wrap">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-          <span className="font-semibold text-slate-200">Satellite Orthomosaic Stage</span>
+          <span className="font-semibold text-slate-200">Satellite Multi-Spectral Stage</span>
           {result && (
             <span className="font-mono text-[11px] text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/40">
               {result.satelliteSensor}
@@ -58,43 +103,99 @@ export const SatelliteViewer: React.FC<SatelliteViewerProps> = ({
         </div>
 
         {/* Display Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Filter selector */}
           <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-[11px]">
             <button
               type="button"
-              onClick={() => setActiveFilter("normal")}
+              onClick={() => handleFilterChange("normal")}
               className={`px-2 py-1 rounded transition-colors ${
                 activeFilter === "normal" ? "bg-slate-800 text-cyan-300 font-semibold" : "text-slate-400 hover:text-slate-200"
               }`}
             >
-              RGB True
+              RGB
             </button>
             <button
               type="button"
-              onClick={() => setActiveFilter("false-color")}
+              onClick={() => handleFilterChange("false-color")}
               className={`px-2 py-1 rounded transition-colors ${
                 activeFilter === "false-color" ? "bg-slate-800 text-cyan-300 font-semibold" : "text-slate-400 hover:text-slate-200"
               }`}
-              title="Simulates NIR/SWIR false-color infrared band"
+              title="NIR/SWIR false-color infrared band (Burn scars & fire)"
             >
               NIR/SWIR
             </button>
             <button
               type="button"
-              onClick={() => setActiveFilter("high-contrast")}
+              onClick={() => handleFilterChange("sar-radar")}
+              className={`px-2 py-1 rounded transition-colors ${
+                activeFilter === "sar-radar" ? "bg-slate-800 text-cyan-300 font-semibold" : "text-slate-400 hover:text-slate-200"
+              }`}
+              title="Synthetic Aperture Radar (SAR water inundation)"
+            >
+              SAR Radar
+            </button>
+            <button
+              type="button"
+              onClick={() => handleFilterChange("ndvi")}
+              className={`px-2 py-1 rounded transition-colors ${
+                activeFilter === "ndvi" ? "bg-slate-800 text-cyan-300 font-semibold" : "text-slate-400 hover:text-slate-200"
+              }`}
+              title="Normalized Difference Vegetation Index (Chlorophyll)"
+            >
+              NDVI
+            </button>
+            <button
+              type="button"
+              onClick={() => handleFilterChange("high-contrast")}
               className={`px-2 py-1 rounded transition-colors ${
                 activeFilter === "high-contrast" ? "bg-slate-800 text-cyan-300 font-semibold" : "text-slate-400 hover:text-slate-200"
               }`}
             >
-              High Contrast
+              Contrast+
             </button>
+          </div>
+
+          {/* Zoom In / Out Controls */}
+          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs text-slate-300">
+            <button
+              type="button"
+              onClick={() => handleZoom(-0.2)}
+              disabled={zoomLevel <= 1}
+              className="p-1 hover:text-cyan-400 disabled:opacity-40"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <span className="px-1.5 font-mono text-[10px]">{zoomLevel}x</span>
+            <button
+              type="button"
+              onClick={() => handleZoom(0.2)}
+              disabled={zoomLevel >= 2.5}
+              className="p-1 hover:text-cyan-400 disabled:opacity-40"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            {zoomLevel > 1 && (
+              <button
+                type="button"
+                onClick={() => setZoomLevel(1)}
+                className="p-1 hover:text-rose-400"
+                title="Reset Zoom"
+              >
+                <RotateCcw className="w-3 h-3" />
+              </button>
+            )}
           </div>
 
           {/* Overlay Toggle */}
           <button
             type="button"
-            onClick={() => setShowOverlays(!showOverlays)}
+            onClick={() => {
+              setShowOverlays(!showOverlays);
+              playTelemetryPing(800);
+            }}
             className={`px-2.5 py-1 rounded-lg border text-xs flex items-center gap-1.5 transition-colors ${
               showOverlays
                 ? "bg-cyan-950/60 text-cyan-300 border-cyan-800/60"
@@ -104,19 +205,44 @@ export const SatelliteViewer: React.FC<SatelliteViewerProps> = ({
             {showOverlays ? <Eye className="w-3.5 h-3.5 text-cyan-400" /> : <EyeOff className="w-3.5 h-3.5" />}
             <span className="hidden sm:inline">Telemetry Grid</span>
           </button>
+
+          {/* Quick Scan AOI Button */}
+          {onScan && (
+            <button
+              id="satellite-quick-scan-btn"
+              type="button"
+              onClick={onScan}
+              disabled={isScanning}
+              className="px-3 py-1 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Execute Automated Multi-Spectral Disaster Scan on this AOI"
+            >
+              <Crosshair className={`w-3.5 h-3.5 ${isScanning ? "animate-spin" : ""}`} />
+              <span>{isScanning ? "Scanning..." : "Scan AOI"}</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* Main Image Stage */}
-      <div className="relative w-full h-[380px] sm:h-[460px] md:h-[500px] bg-slate-950 overflow-hidden select-none flex items-center justify-center">
+      <div
+        ref={containerRef}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setMouseCoords(null)}
+        className="relative w-full h-[380px] sm:h-[460px] md:h-[500px] bg-slate-950 overflow-hidden select-none flex items-center justify-center cursor-crosshair"
+      >
         {imageUrl ? (
-          <img
-            id="active-satellite-image"
-            src={imageUrl}
-            alt="Active satellite observation"
-            className={`w-full h-full object-cover transition-all duration-300 ${getFilterClass()}`}
-            referrerPolicy="no-referrer"
-          />
+          <div
+            className="w-full h-full transition-transform duration-200 flex items-center justify-center"
+            style={{ transform: `scale(${zoomLevel})` }}
+          >
+            <img
+              id="active-satellite-image"
+              src={imageUrl}
+              alt="Active satellite observation"
+              className={`w-full h-full object-cover transition-all duration-300 ${getFilterClass()}`}
+              referrerPolicy="no-referrer"
+            />
+          </div>
         ) : (
           <div className="text-center text-slate-500 p-6 space-y-2">
             <Crosshair className="w-8 h-8 mx-auto text-slate-600 animate-spin" />
@@ -172,14 +298,16 @@ export const SatelliteViewer: React.FC<SatelliteViewerProps> = ({
                 <div
                   key={zone.id}
                   id={`hazard-box-${zone.id}`}
-                  onMouseEnter={() => setHoveredZone(zone)}
+                  onMouseEnter={() => {
+                    setHoveredZone(zone);
+                    playTelemetryPing(1100);
+                  }}
                   onMouseLeave={() => setHoveredZone(null)}
                   style={{ top, left, width, height }}
                   className={`absolute border-2 rounded-lg transition-all duration-150 cursor-pointer ${getZoneBorderColor(
                     zone.severity
                   )} ${isHovered ? "ring-2 ring-white scale-102 z-30" : "z-20"}`}
                 >
-                  {/* Zone Label Badge */}
                   <div className="absolute -top-6 left-0 flex items-center gap-1 bg-slate-950/90 text-white text-[10px] font-mono px-2 py-0.5 rounded shadow border border-slate-700 whitespace-nowrap">
                     <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
                     <span>{zone.label}</span>
@@ -202,6 +330,16 @@ export const SatelliteViewer: React.FC<SatelliteViewerProps> = ({
                 </span>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Dynamic Coordinates Reticle HUD on mouse hover */}
+        {mouseCoords && result && (
+          <div className="absolute top-3 left-3 bg-slate-950/90 border border-cyan-500/40 px-2.5 py-1 rounded-lg text-[10px] font-mono text-cyan-300 backdrop-blur-sm z-30 pointer-events-none flex items-center gap-2">
+            <Compass className="w-3 h-3 text-cyan-400" />
+            <span>
+              AOI PIXEL: X:{mouseCoords.x}% Y:{mouseCoords.y}% | LAT: {(result.coordinates.lat + (50 - mouseCoords.y) * 0.002).toFixed(4)}° LNG: {(result.coordinates.lng + (mouseCoords.x - 50) * 0.002).toFixed(4)}°
+            </span>
           </div>
         )}
 

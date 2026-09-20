@@ -12,6 +12,8 @@ import { AICopilotChat } from "./components/AICopilotChat";
 import { AnalyticsDashboard } from "./components/AnalyticsDashboard";
 import { AdminPortal } from "./components/AdminPortal";
 import { AuthModal } from "./components/AuthModal";
+import { LoginPage } from "./components/LoginPage";
+import { VFXBackground } from "./components/VFXBackground";
 import { SATELLITE_PRESETS } from "./data/presets";
 import {
   DetectionResult,
@@ -23,10 +25,15 @@ import {
   DisasterIncident
 } from "./types";
 import { ShieldAlert, Bot } from "lucide-react";
+import {
+  playScanSweep,
+  playCriticalAlert,
+  playAuthSuccess,
+  playTelemetryPing
+} from "./utils/audioEffects";
 
 export function App() {
-  // Navigation & User State
-  const [activeTab, setActiveTab] = useState<AppModule>("scanner");
+  // User Authentication State: Displays LoginPage first if not logged in
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem("satellite_auth_user");
     if (saved) {
@@ -34,19 +41,11 @@ export function App() {
         return JSON.parse(saved);
       } catch {}
     }
-    // Default logged in as Commander Sarah Vance for immediate full access
-    return {
-      id: "usr-admin-1",
-      name: "Commander Sarah Vance",
-      email: "admin@satellite.gov",
-      role: "admin",
-      agency: "Global Disaster Response Agency (GDRA)",
-      status: "active",
-      lastActive: "Just now",
-      clearanceLevel: "Level 3 - Top Secret"
-    };
+    return null; // Show LoginPage first as requested
   });
 
+  // Navigation & Drawer States
+  const [activeTab, setActiveTab] = useState<AppModule>("scanner");
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isFloatingChatOpen, setIsFloatingChatOpen] = useState(false);
 
@@ -68,11 +67,20 @@ export function App() {
   const [sensor, setSensor] = useState(SATELLITE_PRESETS[0].sensor);
 
   // Result & Execution States
-  const [activeResult, setActiveResult] = useState<DetectionResult | null>(null);
+  const [activeResult, setActiveResult] = useState<DetectionResult | null>(() => {
+    const p = SATELLITE_PRESETS[0];
+    return {
+      id: `scan-init-${p.id}`,
+      timestamp: new Date().toISOString(),
+      imageUrl: p.imageUrl,
+      ...p.fallbackResult,
+      isAiGenerated: true
+    };
+  });
   const [isScanning, setIsScanning] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Initial load
+  // Initial data loading
   useEffect(() => {
     checkHealth();
     fetchHistory();
@@ -106,7 +114,7 @@ export function App() {
         }
       }
     } catch (e) {
-      console.warn("Using bundled satellite presets:", e);
+      console.warn("Using bundled presets:", e);
     }
   };
 
@@ -156,6 +164,7 @@ export function App() {
   };
 
   const handleLogout = () => {
+    playTelemetryPing(600);
     setCurrentUser(null);
     localStorage.removeItem("satellite_auth_user");
     setIsAuthModalOpen(false);
@@ -170,6 +179,14 @@ export function App() {
     setDisasterTypeHint(preset.disasterType);
     setSensor(preset.sensor);
     setErrorMsg(null);
+    setActiveResult({
+      id: `scan-${preset.id}-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      imageUrl: preset.imageUrl,
+      ...preset.fallbackResult,
+      isAiGenerated: false
+    });
+    playTelemetryPing(950);
   };
 
   const handleCustomImageUploaded = (base64: string) => {
@@ -178,6 +195,7 @@ export function App() {
     setSelectedPreset(null);
     setLocationName("Custom Reconnaissance Target");
     setErrorMsg(null);
+    playAuthSuccess();
   };
 
   const handleClearCustomImage = () => {
@@ -190,6 +208,7 @@ export function App() {
   const handleExecuteDetection = async (presetOverride?: SatellitePreset) => {
     setIsScanning(true);
     setErrorMsg(null);
+    playScanSweep();
 
     const targetPreset = presetOverride || selectedPreset;
 
@@ -225,6 +244,13 @@ export function App() {
       setActiveResult(newRecord);
       setActiveImageUrl(newRecord.imageUrl || activeImageUrl);
 
+      // Play appropriate telemetry sound
+      if (newRecord.immediateEvacuationNeed || newRecord.severityLevel === "Catastrophic") {
+        playCriticalAlert();
+      } else {
+        playAuthSuccess();
+      }
+
       fetchHistory();
       fetchStats();
 
@@ -243,6 +269,7 @@ export function App() {
           ...targetPreset.fallbackResult
         };
         setActiveResult(fallback);
+        playAuthSuccess();
       }
     } finally {
       setIsScanning(false);
@@ -255,6 +282,7 @@ export function App() {
       if (res.ok) {
         setHistory((prev) => prev.filter((r) => r.id !== id));
         fetchStats();
+        playTelemetryPing(500);
       }
     } catch (e) {
       console.error("Delete failed:", e);
@@ -267,6 +295,7 @@ export function App() {
       if (res.ok) {
         setHistory([]);
         fetchStats();
+        playTelemetryPing(400);
       }
     } catch (e) {
       console.error("Clear failed:", e);
@@ -281,10 +310,54 @@ export function App() {
     setDisasterTypeHint(record.primaryHazard);
     setSensor(record.satelliteSensor);
     setActiveTab("scanner");
+    playTelemetryPing(850);
   };
 
+  const handleEscalateToDispatch = async (result: DetectionResult) => {
+    try {
+      playCriticalAlert();
+      // Provision incident in backend store
+      const res = await fetch("/api/incidents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `CRITICAL: ${result.primaryHazard} Escalation - ${result.locationName}`,
+          location: result.locationName,
+          hazardType: result.primaryHazard,
+          severity: result.confidenceScore > 0.85 ? "Catastrophic" : "Severe",
+          coordinatorName: currentUser?.name || "Command Officer"
+        })
+      });
+      if (res.ok) {
+        await fetchIncidents();
+      }
+    } catch (e) {
+      console.error("Escalation dispatch error:", e);
+    } finally {
+      setActiveTab("incidents");
+    }
+  };
+
+  // -------------------------------------------------------------
+  // 1. If user is NOT logged in: SHOW LOGIN PAGE FIRST!
+  // -------------------------------------------------------------
+  if (!currentUser) {
+    return (
+      <>
+        <VFXBackground />
+        <LoginPage onLoginSuccess={handleLoginSuccess} />
+      </>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // 2. If user IS logged in: SHOW COMMAND DASHBOARD WITH 8 MODULES
+  // -------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-950 relative">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-950 relative transition-colors">
+      {/* VFX Ambient Background Canvas & Mode Overlays */}
+      <VFXBackground />
+
       {/* Primary Navigation & Brand Header */}
       <Header
         backendConnected={backendConnected}
@@ -294,12 +367,14 @@ export function App() {
           fetchStats();
           fetchHistory();
           fetchIncidents();
+          playTelemetryPing(1000);
         }}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         historyCount={history.length}
         currentUser={currentUser}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onLogout={handleLogout}
         isFloatingChatOpen={isFloatingChatOpen}
         onToggleFloatingChat={() => setIsFloatingChatOpen(!isFloatingChatOpen)}
       />
@@ -308,10 +383,10 @@ export function App() {
       <StatsBar stats={stats} />
 
       {/* Main Container for 8 Modules */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6 relative z-10">
         {/* Error Notification */}
         {errorMsg && (
-          <div className="bg-rose-950/60 border border-rose-800 text-rose-300 px-4 py-3 rounded-xl text-xs flex items-center justify-between">
+          <div className="bg-rose-950/80 border border-rose-800 text-rose-300 px-4 py-3 rounded-xl text-xs flex items-center justify-between shadow-lg">
             <span className="flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
               <span>{errorMsg}</span>
@@ -333,6 +408,7 @@ export function App() {
                 imageUrl={activeImageUrl}
                 result={activeResult}
                 isScanning={isScanning}
+                onScan={() => handleExecuteDetection()}
               />
               <ImageUploader
                 customImage={customImage}
@@ -352,7 +428,10 @@ export function App() {
             </div>
 
             <div className="lg:col-span-5 space-y-5">
-              <AnalysisReport result={activeResult} />
+              <AnalysisReport
+                result={activeResult}
+                onEscalateToDispatch={handleEscalateToDispatch}
+              />
             </div>
           </div>
         )}
@@ -432,7 +511,7 @@ export function App() {
         )}
       </main>
 
-      {/* Floating AI Chatbot Drawer / Widget (Accessible from any page) */}
+      {/* Floating AI Chatbot Drawer / Widget (Accessible anywhere) */}
       {isFloatingChatOpen && (
         <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-6 duration-200">
           <AICopilotChat
@@ -444,7 +523,7 @@ export function App() {
         </div>
       )}
 
-      {/* Interactive Logon & Authentication Modal */}
+      {/* Interactive Profile & Clearance Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
@@ -454,11 +533,11 @@ export function App() {
       />
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950/90 py-4 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-500">
+      <footer className="border-t border-slate-900 bg-slate-950/90 py-4 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-500 relative z-10">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Satellite Disaster Detection System • 8 Integrated Modules with Full Frontend, Backend & Database</span>
+          <span>Satellite Disaster Detection System • 8 Integrated Modules with Live Geospatial & Multi-Spectral Telemetry</span>
           <span className="font-mono text-[11px] text-slate-600">
-            Node.js 22 • Express • Vite React • Sentinel-2, Landsat-9, WorldView-3 & Gemini 3.8
+            Sentinel-2, Landsat-9, WorldView-3 & Gemini 3.8 Flash • Deployment-Ready
           </span>
         </div>
       </footer>

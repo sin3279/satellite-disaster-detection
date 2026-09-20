@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { DetectionResult, DisasterType } from "../types";
-import { Database, Trash2, Search, Filter, Calendar, MapPin, Eye, AlertTriangle, Flame, Droplet, Activity, Wind } from "lucide-react";
+import { Database, Trash2, Search, Filter, Calendar, MapPin, Eye, AlertTriangle, Flame, Droplet, Activity, Wind, AlertCircle } from "lucide-react";
+import { playTelemetryPing } from "../utils/audioEffects";
 
 interface HistoryListProps {
   history: DetectionResult[];
@@ -21,6 +22,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [hazardFilter, setHazardFilter] = useState<string>("all");
+  const [isConfirmingPurge, setIsConfirmingPurge] = useState(false);
 
   const filteredHistory = history.filter((item) => {
     const matchesSearch =
@@ -67,18 +69,43 @@ export const HistoryList: React.FC<HistoryListProps> = ({
         </div>
 
         {history.length > 0 && (
-          <button
-            type="button"
-            onClick={() => {
-              if (confirm("Are you sure you want to clear all telemetry database records?")) {
-                onClearHistory();
-              }
-            }}
-            className="text-xs text-slate-400 hover:text-rose-400 transition-colors flex items-center gap-1.5 self-start sm:self-auto"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Purge Database</span>
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {isConfirmingPurge ? (
+              <div className="flex items-center gap-2 bg-rose-950/80 border border-rose-700/80 rounded-lg px-2.5 py-1 text-xs">
+                <span className="text-rose-200">Confirm purge database?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsConfirmingPurge(false);
+                    onClearHistory();
+                    playTelemetryPing(400);
+                  }}
+                  className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold cursor-pointer"
+                >
+                  Yes, Purge
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingPurge(false)}
+                  className="text-slate-400 hover:text-slate-200 px-1"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsConfirmingPurge(true);
+                  playTelemetryPing(700);
+                }}
+                className="text-xs text-slate-400 hover:text-rose-400 transition-colors flex items-center gap-1.5 cursor-pointer py-1 px-2 rounded-lg hover:bg-slate-800"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Purge Database</span>
+              </button>
+            )}
+          </div>
         )}
       </div>
 
